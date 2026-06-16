@@ -149,12 +149,18 @@ function renderKPIs(dni, h2) {
     document.getElementById('kpi-irradiance').textContent = formatNumber(dni, 2);
     document.getElementById('kpi-h2-production').textContent = formatNumber(h2, 2);
 
+    // 1. Calcular la proyección anual en kilogramos de H2
     const projectedAnnualH2_kg = h2 * 365;
-    document.getElementById('kpi-glp-substitution').textContent = formatNumber(projectedAnnualH2_kg, 2);
 
-    const cardParagraph = document.getElementById('kpi-glp-substitution').nextElementSibling;
-    cardParagraph.innerHTML = `Proyección anual (<span class="font-medium">kg H₂/año</span>) Meta: 1,732 kg/año`;
+    // 2. Inyectar el valor numérico en la tarjeta 3
+    const kpiSubstitution = document.getElementById('kpi-glp-substitution');
+    kpiSubstitution.textContent = formatNumber(projectedAnnualH2_kg, 2);
 
+    // 3. CORRECCIÓN ESTRICTA: Forzar la unidad correcta en el texto inferior para evitar la palabra "Cilindros" o "Hoy"
+    const cardParagraph = kpiSubstitution.nextElementSibling;
+    cardParagraph.innerHTML = `Proyección anual (<span class="font-medium">kg H₂/año</span>) · Meta: 1,732 kg/año`;
+
+    // 4. LCOH Dinámico
     const dynamicLCOH = CONFIG.LCOH_BASE * (1 - (state.capexSubsidy / 100));
     const lcohElement = document.getElementById('kpi-lcoh');
     lcohElement.textContent = formatNumber(dynamicLCOH, 2);
