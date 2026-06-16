@@ -144,13 +144,15 @@ function renderKPIs(dni, h2) {
     document.getElementById('kpi-irradiance').textContent = formatNumber(dni, 2);
     document.getElementById('kpi-h2-production').textContent = formatNumber(h2, 2);
 
-    // Sustitución de GLP por LHV equivalente
-    const energyH2_kWh = h2 * CONFIG.LOWER_HEATING_VALUE_H2_KWH_KG;
-    const glpEquivalent_kg = energyH2_kWh / CONFIG.LOWER_HEATING_VALUE_GLP_KWH_KG;
-    const cylinders = glpEquivalent_kg / CONFIG.KG_GLP_PER_CYLINDER;
-    document.getElementById('kpi-glp-substitution').textContent = formatNumber(cylinders, 2);
+    // CORRECCIÓN: Proyección Anual Directa en kg H2 para contrastar con la Meta
+    const projectedAnnualH2_kg = h2 * 365;
+    document.getElementById('kpi-glp-substitution').textContent = formatNumber(projectedAnnualH2_kg, 2);
 
-    // LCOH Dinámico con subsidio CAPEX
+    // Ajustar el texto explicativo de la tarjeta dinámicamente
+    const cardParagraph = document.getElementById('kpi-glp-substitution').nextElementSibling;
+    cardParagraph.innerHTML = `Proyección anual (<span class="font-medium">kg H₂/año</span>) Meta: 1,732 kg/año`;
+
+    // LCOH Dinámico
     const dynamicLCOH = CONFIG.LCOH_BASE * (1 - (state.capexSubsidy / 100));
     const lcohElement = document.getElementById('kpi-lcoh');
     lcohElement.textContent = formatNumber(dynamicLCOH, 2);
