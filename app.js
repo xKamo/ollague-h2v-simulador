@@ -76,18 +76,23 @@ function initListeners() {
 }
 
 async function fetchWeatherData() {
-    const url = `https://api.open-meteo.com/v1/forecast?latitude=${CONFIG.LATITUDE}&longitude=${CONFIG.LONGITUDE}&hourly=direct_normal_irradiance&forecast_days=1&timezone=America/Santiago`;
+    // URL parametrizada limpia sin caracteres de escape conflictivos
+    const url = 'https://api.open-meteo.com/v1/forecast?latitude=-21.22&longitude=-68.25&hourly=direct_normal_irradiance&forecast_days=1&timezone=America%2FSantiago';
     try {
         const response = await fetch(url);
         if (!response.ok) throw new Error('Error en la API');
         const data = await response.json();
 
+        if (!data.hourly || !data.hourly.direct_normal_irradiance) {
+            throw new Error('Estructura de datos incompleta');
+        }
+
         state.rawHourlyData = data.hourly;
         recalculateAndRender();
     } catch (error) {
-        console.error('Error:', error);
+        console.error('Error detallado de conexión:', error);
         alert('No se pudieron recuperar los datos de Open-Meteo.');
-    }
+        }
 }
 
 // Orquestador de recálculo instantáneo (Inyección de fórmulas elásticas de la tesis)
