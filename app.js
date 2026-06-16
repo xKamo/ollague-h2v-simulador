@@ -1,6 +1,6 @@
 /**
  * Ollagüe H2V - Simulador de Transición Energética
- * Versión de Alta Disponibilidad con Fallback Local para Defensa
+ * Motor de Cálculo Reactivo y Sincronizado para Defensa de Tesis
  */
 
 const CONFIG = {
@@ -8,25 +8,22 @@ const CONFIG = {
     LONGITUDE: -68.25,
     ELECTROLYZER_CAPACITY_KW: 22.5,
     BASE_ELECTROLYZER_EFFICIENCY: 65.0,
-    BASE_SPECIFIC_CONSUMPTION: 52.5,
+    BASE_SPECIFIC_CONSUMPTION: 52.5, // kWh/kg H2
     FV_PEAK_CAPACITY_MW: 2.0,
     LCOH_BASE: 49.19,
-    PRICE_GLP_REF: 2.19,
-    KG_GLP_PER_CYLINDER: 15.0,
-    LOWER_HEATING_VALUE_H2_KWH_KG: 33.33,
-    LOWER_HEATING_VALUE_GLP_KWH_KG: 12.8
+    PRICE_GLP_REF: 2.19
 };
 
-// Datos históricos de respaldo (Cielo claro típico de Ollagüe) en caso de caída de API
+// Respaldo de radiación típico para Ollagüe (Evita pantallas en blanco si la API falla o está bloqueada)
 const OLLAGUE_FALLBACK_DNI = [
-    0, 0, 0, 0, 0, 0, 0, 45, 380, 720, 910, 1010, 1040, 1010, 910, 720, 380, 45, 0, 0, 0, 0, 0, 0
+    0, 0, 0, 0, 0, 0, 0, 120, 450, 780, 950, 1020, 1050, 1020, 950, 780, 450, 120, 0, 0, 0, 0, 0, 0
 ];
 
 let state = {
     capexSubsidy: 0,
     fvDegradation: 0,
     elyEfficiency: 65,
-    rawHourlyData: [],
+    rawHourlyData: {},
     chartInstance: null
 };
 
@@ -73,38 +70,24 @@ function initListeners() {
 async function fetchWeatherData() {
     const url = 'https://api.open-meteo.com/v1/forecast?latitude=-21.22&longitude=-68.25&hourly=direct_normal_irradiance&forecast_days=1&timezone=America%2FSantiago';
 
-    // Controlador de tiempo de espera (Timeout de 3 segundos)
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 3000);
-
     try {
-        const response = await fetch(url, { signal: controller.signal });
-        clearTimeout(timeoutId);
-
-        if (!response.ok) throw new Error('Respuesta de API no OK');
+        const response = await fetch(url);
+        if (!response.ok) throw new Error('API con sobrecarga');
         const data = await response.json();
-
         if (!data.hourly || !data.hourly.direct_normal_irradiance) throw new Error('Datos incompletos');
 
         state.rawHourlyData = data.hourly;
-        console.log("Datos cargados exitosamente desde Open-Meteo API.");
+        document.getElementById('api-status-dot').className = "w-2 h-2 rounded-full bg-emerald-500 animate-pulse";
+        document.getElementById('api-status-text').textContent = "API Open-Meteo Activa";
     } catch (error) {
-        clearTimeout(timeoutId);
-        console.warn("API offline o lenta. Cargando matriz histórica de respaldo (Ollagüe Fallback DNI).", error);
-
-        // Construir estructura idéntica a la API pero con datos locales hardcodeados
+        console.warn("Cargando matriz de respaldo de Ollagüe debido a restricciones de red local.");
         const baseIsoTime = new Date().toISOString().split('T')[0];
         state.rawHourlyData = {
             time: Array.from({length: 24}, (_, i) => `${baseIsoTime}T${String(i).padStart(2, '0')}:00`),
             direct_normal_irradiance: OLLAGUE_FALLBACK_DNI
         };
-
-        // Modificar sutilmente el tag de estado visual para alertar al desarrollador de forma limpia sin alertas intrusivas
-        const apiTag = document.querySelector('header span');
-        if (apiTag) {
-            apiTag.className = "w-2 h-2 rounded-full bg-amber-500";
-            apiTag.nextSibling.textContent = " Respaldo Histórico Activo";
-        }
+        document.getElementById('api-status-dot').className = "w-2 h-2 rounded-full bg-amber-500 animate-none";
+        document.getElementById('api-status-text').textContent = "Respaldo Histórico Activo";
     } finally {
         recalculateAndRender();
     }
@@ -149,18 +132,9 @@ function renderKPIs(dni, h2) {
     document.getElementById('kpi-irradiance').textContent = formatNumber(dni, 2);
     document.getElementById('kpi-h2-production').textContent = formatNumber(h2, 2);
 
-    // 1. Calcular la proyección anual en kilogramos de H2
     const projectedAnnualH2_kg = h2 * 365;
+    document.getElementById('kpi-annual-projection').textContent = formatNumber(projectedAnnualH2_kg, 2);
 
-    // 2. Inyectar el valor numérico en la tarjeta 3
-    const kpiSubstitution = document.getElementById('kpi-glp-substitution');
-    kpiSubstitution.textContent = formatNumber(projectedAnnualH2_kg, 2);
-
-    // 3. CORRECCIÓN ESTRICTA: Forzar la unidad correcta en el texto inferior para evitar la palabra "Cilindros" o "Hoy"
-    const cardParagraph = kpiSubstitution.nextElementSibling;
-    cardParagraph.innerHTML = `Proyección anual (<span class="font-medium">kg H₂/año</span>) · Meta: 1,732 kg/año`;
-
-    // 4. LCOH Dinámico
     const dynamicLCOH = CONFIG.LCOH_BASE * (1 - (state.capexSubsidy / 100));
     const lcohElement = document.getElementById('kpi-lcoh');
     lcohElement.textContent = formatNumber(dynamicLCOH, 2);
